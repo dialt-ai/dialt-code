@@ -32,7 +32,7 @@ def _ensure_api_key() -> str | None:
     key = config.get_api_key()
     if key:
         return key
-    print("No Converse API key found. Get one from the converse.trelis.com dashboard.")
+    print("No Converse API key found. Get one from the dialt.com dashboard.")
     key = getpass.getpass("Paste your API key (ck_…): ").strip()
     if key:
         config.save_api_key(key)

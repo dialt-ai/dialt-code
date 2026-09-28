@@ -1,7 +1,7 @@
 # Converse Code
 
 A deliberately small voice remote for a normal, visible Pi terminal, and a reference
-implementation for [Converse](https://converse.trelis.com) background tools and the Browser SDK.
+implementation for [Converse](https://dialt.com) background tools and the Browser SDK.
 Pi uses the user's ChatGPT Plus/Pro Codex subscription.
 
 The example exposes the same small controls a person has over Pi:

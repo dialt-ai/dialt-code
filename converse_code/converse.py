@@ -7,8 +7,8 @@ from dataclasses import asdict, dataclass
 import aiohttp
 import websockets
 
-DEFAULT_WS_URL = "wss://converse.trelis.com/ws"
-DEFAULT_API_URL = "https://converse.trelis.com"
+DEFAULT_WS_URL = "wss://api.dialt.com/v1/realtime"
+DEFAULT_API_URL = "https://api.dialt.com"
 
 
 class CredentialError(RuntimeError):
@@ -39,13 +39,14 @@ async def mint_session_credential(
     api_url: str = DEFAULT_API_URL,
 ) -> SessionCredential:
     """Exchange the server-held key for one browser-safe scoped credential."""
-    endpoint = f"{api_url.rstrip('/')}/api/v1/session-keys"
+    endpoint = f"{api_url.rstrip('/')}/v1/session-keys"
     async with (
         aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session,
         session.post(
             endpoint,
             headers={"Authorization": f"Bearer {api_key}"},
             json={"session_id": session_id},
+            allow_redirects=False,
         ) as response,
     ):
         try:

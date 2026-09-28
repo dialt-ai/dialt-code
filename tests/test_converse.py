@@ -15,7 +15,7 @@ from converse_code.converse import (
 @asynccontextmanager
 async def credential_endpoint(issue):
     app = web.Application()
-    app.router.add_post("/api/v1/session-keys", issue)
+    app.router.add_post("/v1/session-keys", issue)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, "127.0.0.1", 0)

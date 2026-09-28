@@ -1,7 +1,7 @@
 # Converse Code
 
 A voice remote for a normal, visible Pi terminal and a minimal reference implementation of
-Converse background tools and the Browser SDK. Pi uses a ChatGPT Plus/Pro Codex subscription.
+Dialt background tools and the Browser SDK. Pi uses a ChatGPT Plus/Pro Codex subscription.
 
 ```bash
 npm install -g @earendil-works/pi-coding-agent

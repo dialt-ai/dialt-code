@@ -1,7 +1,7 @@
 [project]
 name = "converse-code"
 version = "0.10.10"
-description = "Voice control for a visible Pi terminal using Converse background tools"
+description = "Voice control for a visible Pi terminal using Dialt background tools"
 readme = "PYPI.md"
 license = "Apache-2.0"
 requires-python = ">=3.11"

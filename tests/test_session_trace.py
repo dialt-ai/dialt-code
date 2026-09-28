@@ -42,6 +42,16 @@ def test_session_trace_writes_timestamped_jsonl_and_redacts_credentials(tmp_path
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
 
 
+def test_session_trace_redacts_dialt_and_legacy_keys_in_free_text(tmp_path):
+    path = tmp_path / "session.jsonl"
+    trace = SessionTrace(path)
+    trace.record("host", "note", text="pasted dk_new-secret then ck_old-secret")
+    trace.close()
+
+    entry = json.loads(path.read_text().strip())
+    assert entry["data"]["text"] == "pasted [REDACTED] then [REDACTED]"
+
+
 def test_session_trace_appends_distinct_sessions(tmp_path):
     path = tmp_path / "session.jsonl"
     first = SessionTrace(path)

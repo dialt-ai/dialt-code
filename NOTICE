@@ -1,12 +1,12 @@
 Converse Code
 Copyright 2026 Trelis LTD
 
-This distribution includes the Trelis Converse Browser SDK under
-converse_code/web/vendor/converse. Trelis-authored portions of that SDK are
+This distribution includes the Dialt Browser SDK (@dialt/sdk) under
+converse_code/web/vendor/dialt. Dialt-authored portions of that SDK are
 licensed under the Apache License, Version 2.0. Its own NOTICE and third-party
 license files are retained in that directory and continue to govern the bundled
 components they identify.
 
 The licenses in this repository cover the Converse Code client and the bundled
-Browser SDK source. They do not grant rights to the hosted Converse service, its
-models, Trelis trademarks, or server-side software.
+Browser SDK source. They do not grant rights to the hosted Dialt service, its
+models, Dialt trademarks, or server-side software.

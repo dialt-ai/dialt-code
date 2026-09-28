@@ -1,14 +1,14 @@
-// WebRTC transport support for ConverseClient — see serving/broker_webrtc.py's module docstring
+// WebRTC transport support for DialtClient - see serving/broker_webrtc.py's module docstring
 // for the full wire contract this mirrors. Two independent pieces live here:
 //
 //   TrackFeeder  — turns mic frames (whatever startMic()/pushMicFrame() would otherwise ws.send()
 //                  as PCM16) into a real outbound MediaStreamTrack, by re-injecting them through an
 //                  AudioWorkletNode into a MediaStreamAudioDestinationNode. RTCPeerConnection.
 //                  addTrack() needs a live MediaStreamTrack before the offer/ICE-gather/answer
-//                  exchange even happens — and that exchange has to complete before ConverseClient
+//                  exchange even happens - and that exchange has to complete before DialtClient
 //                  knows whether the app will call startMic() at all (connect() resolves first) —
 //                  so this feeder's track is always what negotiates the offer's audio m-line.
-//                  Once startMic() runs (the normal path: no forced SDK-side AEC), ConverseClient
+//                  Once startMic() runs (the normal path: no forced SDK-side AEC), DialtClient
 //                  replaceTrack()s the sender straight onto the real getUserMedia device track —
 //                  zero added JS hops/latency, no renegotiation needed — and this feeder goes idle.
 //                  It stays the ACTIVE uplink only for callers with no MicCapture at all (custom
@@ -23,8 +23,10 @@
 //                   round-trip, acceptable latency for a single-hop broker-terminated call), and
 //                   later applies the server's answer.
 //
-// Both are deliberately dumb/mockable: ConverseClient owns all protocol semantics (start frame,
+// Both are deliberately dumb/mockable: DialtClient owns all protocol semantics (start frame,
 // ready/bye handling, reconnection policy); this module only knows WebRTC plumbing.
+
+import { addWorkletModule, defaultWorkletModuleUrls } from './worklet-url.js';
 
 const STUN_URL = 'stun:stun.l.google.com:19302';
 
@@ -34,7 +36,14 @@ const SOURCE_RATE = 16000;
 
 export class TrackFeeder {
   constructor({ workletUrl } = {}) {
-    this.workletUrl = workletUrl || new URL('./track-feeder-worklet.js', import.meta.url);
+    const [defaultWorkletUrl, fallbackWorkletUrl] = defaultWorkletModuleUrls(
+      // Keep the primary URL literal here so ordinary bundlers emit the worklet asset.
+      new URL('./track-feeder-worklet.js', import.meta.url),
+      'track-feeder-worklet.js',
+      import.meta.url,
+    );
+    this.workletUrl = workletUrl || defaultWorkletUrl;
+    this.fallbackWorkletUrl = workletUrl ? null : fallbackWorkletUrl;
     this.context = null;
     this.worklet = null;
     this.destination = null;
@@ -61,7 +70,9 @@ export class TrackFeeder {
           `(got ${this.context.sampleRate} Hz); mic audio quality will be degraded.`
         );
       }
-      await this.context.audioWorklet.addModule(this.workletUrl);
+      await addWorkletModule(
+        this.context.audioWorklet, this.workletUrl, this.fallbackWorkletUrl,
+      );
       this.worklet = new AudioWorkletNode(this.context, 'voice-loop-track-feeder', {
         numberOfInputs: 0,
         numberOfOutputs: 1,
@@ -146,7 +157,7 @@ export class WebRtcSession {
   }
 
   /** Returns the RTCRtpSender so the caller can later replaceTrack() a real capture device's
-   *  track in directly (see ConverseClient.startMic) without renegotiating. */
+   *  track in directly (see DialtClient.startMic) without renegotiating. */
   addAudioTrack(track) {
     return this.pc.addTrack(track);
   }

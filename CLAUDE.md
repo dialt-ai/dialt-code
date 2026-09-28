@@ -1,7 +1,7 @@
 # Converse Code engineering contract
 
 Keep this package a small voice remote for the visible Pi terminal and a reference implementation
-of Converse background tools and the Browser SDK. Pi/Codex owns coding; do not add terminal
+of Dialt background tools and the Browser SDK. Pi/Codex owns coding; do not add terminal
 emulation, screen parsing, model menus, generic keypresses, or provider-specific UI automation.
 
 Voice requests must enter Pi through its documented extension `sendUserMessage()` API. Pi owns

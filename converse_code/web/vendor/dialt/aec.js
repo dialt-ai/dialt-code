@@ -89,7 +89,12 @@ export class EchoCanceller {
       this._chunks.push({ samples, t0: startAt });
     };
     player.onCleared = (cutAt) => {
-      this._chunks = this._chunks.filter((c) => c.t0 < cutAt);
+      // Drop chunks that start after the cut and trim the one straddling it: the reference must
+      // end where the speaker does, not where the chunk would have.
+      this._chunks = this._chunks.filter((c) => c.t0 < cutAt).map((c) => {
+        const keep = Math.round((cutAt - c.t0) * SAMPLE_RATE);
+        return keep < c.samples.length ? { samples: c.samples.subarray(0, keep), t0: c.t0 } : c;
+      });
     };
     if (this._pumpTimer == null) {
       this._pumpTimer = setInterval(() => this._pumpRender(), RENDER_PUMP_MS);

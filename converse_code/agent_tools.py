@@ -1,4 +1,4 @@
-"""Minimal Converse controls for one visible Pi session."""
+"""Minimal Dialt voice controls for one visible Pi session."""
 
 from __future__ import annotations
 
@@ -115,13 +115,15 @@ def manifest() -> list[dict]:
             },
             ["approval_id", "decision"],
             timeout=15,
-            wait_for_tool=True,
+            # Dialt calls this only from the caller's answer to a bound approval interaction;
+            # the model never sees it and cannot construct its arguments.
+            resolver_only=True,
         ),
         tool(
             "pi_cancel",
             "Cancel Pi's current turn without ending the voice session.",
             timeout=15,
-            wait_for_tool=True,
+            expected_duration="instant",
         ),
     ]
 
@@ -231,7 +233,7 @@ ActiveTurn = (
 
 
 class PiControlRouter:
-    """Map Converse's human-like controls onto one attributable Pi turn."""
+    """Map Dialt's human-like controls onto one attributable Pi turn."""
 
     def __init__(self, pi, sender, *, handle: str) -> None:
         self.pi = pi

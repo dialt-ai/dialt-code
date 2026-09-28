@@ -78,8 +78,9 @@ def test_manifest_exposes_only_human_equivalent_pi_controls():
     assert tools["pi_request"]["deferred"] is True
     assert tools["pi_request"]["notify_on_complete"] is True
     assert set(tools["pi_request"]["parameters"]["properties"]) == {"user_request"}
-    assert tools["pi_approval"]["wait_for_tool"] is True
-    assert tools["pi_cancel"]["wait_for_tool"] is True
+    assert tools["pi_approval"]["resolver_only"] is True
+    assert tools["pi_cancel"]["expected_duration"] == "instant"
+    assert not any("wait_for_tool" in tool for tool in tools.values())
     assert tools["pi_approval"]["parameters"]["properties"]["decision"]["enum"] == [
         "allow_once", "allow_session", "block",
     ]

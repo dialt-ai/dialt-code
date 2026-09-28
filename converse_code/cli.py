@@ -1,4 +1,4 @@
-"""Use the Converse browser as voice control for a visible Pi terminal."""
+"""Use the Dialt browser page as voice control for a visible Pi terminal."""
 
 from __future__ import annotations
 
@@ -32,8 +32,8 @@ def _ensure_api_key() -> str | None:
     key = config.get_api_key()
     if key:
         return key
-    print("No Converse API key found. Get one from the dialt.com dashboard.")
-    key = getpass.getpass("Paste your API key (ck_…): ").strip()
+    print("No Dialt API key found. Set DIALT_API_KEY or get one from the dialt.com dashboard.")
+    key = getpass.getpass("Paste your API key (dk_…): ").strip()
     if key:
         config.save_api_key(key)
         print(f"Saved to {config.CONFIG_PATH}.")
@@ -41,7 +41,7 @@ def _ensure_api_key() -> str | None:
 
 
 async def _login(url: str) -> int:
-    key = getpass.getpass("Paste your Converse API key (ck_…): ").strip()
+    key = getpass.getpass("Paste your Dialt API key (dk_…): ").strip()
     if not key:
         print("No key given.")
         return 1
@@ -49,7 +49,7 @@ async def _login(url: str) -> int:
         config.save_api_key(key)
         print(f"Key is valid. Saved to {config.CONFIG_PATH}.")
         return 0
-    print("That key was not accepted by the Converse API.")
+    print("That key was not accepted by the Dialt API.")
     return 1
 
 
@@ -138,7 +138,7 @@ async def _run(args, trace: SessionTrace | NullTrace) -> int:
         await server.start(port=args.port)
     except OSError as exc:
         print(
-            f"Could not start the Converse session server on port {args.port}: {exc}\n"
+            f"Could not start the voice session server on port {args.port}: {exc}\n"
             "Another instance may be running; stop it or pass --port 0.",
             file=sys.stderr,
         )
@@ -146,11 +146,11 @@ async def _run(args, trace: SessionTrace | NullTrace) -> int:
     try:
         if not await converse.validate_key(api_key, url=args.broker_url):
             await server.stop()
-            print("Converse rejected that API key. Run: converse-code login", file=sys.stderr)
+            print("Dialt rejected that API key. Run: converse-code login", file=sys.stderr)
             return 1
     except Exception as exc:  # noqa: BLE001 - normalize broker failures at the CLI boundary
         await server.stop()
-        print(f"Could not reach Converse ({exc}). Pi was not started.", file=sys.stderr)
+        print(f"Could not reach Dialt ({exc}). Pi was not started.", file=sys.stderr)
         return 1
 
     environment = {**os.environ, "CONVERSE_CODE_PI_BRIDGE_URL": server.pi_url}
@@ -165,7 +165,7 @@ async def _run(args, trace: SessionTrace | NullTrace) -> int:
         print("Could not launch Pi. Install it first, then run converse-code again.", file=sys.stderr)
         return 1
 
-    print(f"Converse voice control: {server.url}")
+    print(f"Dialt voice control: {server.url}")
     if trace.path is not None:
         print(f"Debug trace: {trace.path}")
         print(f"Debug audio: {trace.path.with_suffix('.audio')}")
@@ -202,19 +202,29 @@ async def _run(args, trace: SessionTrace | NullTrace) -> int:
     return 0
 
 
-def main() -> None:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="converse-code",
-        description="Minimal Converse voice control for the visible Pi terminal.",
+        description=(
+            "Minimal Dialt voice control for the visible Pi terminal. "
+            "Reads the API key from DIALT_API_KEY (legacy CONVERSE_API_KEY) "
+            "or the saved login."
+        ),
     )
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument(
         "--pi", default=os.environ.get("CONVERSE_CODE_PI_CMD", DEFAULT_PI_CMD),
         help="Visible Pi TUI command",
     )
-    parser.add_argument("--broker-url", default=os.environ.get("CONVERSE_URL", converse.DEFAULT_WS_URL))
     parser.add_argument(
-        "--api-url", default=os.environ.get("CONVERSE_API_URL", converse.DEFAULT_API_URL),
+        "--broker-url",
+        default=config.env("DIALT_URL", "CONVERSE_URL", converse.DEFAULT_WS_URL),
+        help="Dialt realtime WebSocket URL (env DIALT_URL; legacy CONVERSE_URL)",
+    )
+    parser.add_argument(
+        "--api-url",
+        default=config.env("DIALT_API_URL", "CONVERSE_API_URL", converse.DEFAULT_API_URL),
+        help="Dialt API origin for session keys (env DIALT_API_URL; legacy CONVERSE_API_URL)",
     )
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument(
@@ -226,8 +236,12 @@ def main() -> None:
         help="append a sensitive, locally redacted JSONL session trace for debugging",
     )
     sub = parser.add_subparsers(dest="cmd")
-    sub.add_parser("login", help="store and validate a Converse API key")
-    args = parser.parse_args()
+    sub.add_parser("login", help="store and validate a Dialt API key")
+    return parser
+
+
+def main() -> None:
+    args = build_parser().parse_args()
     trace = SessionTrace(args.debug_log) if args.debug_log else NullTrace()
     logging.basicConfig(level=logging.WARNING, stream=sys.stderr)
     exit_code = 1

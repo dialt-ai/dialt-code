@@ -53,11 +53,11 @@ async def mint_session_credential(
             body = await response.json()
         except (aiohttp.ContentTypeError, ValueError) as exc:
             raise CredentialError(
-                f"Converse credential endpoint returned HTTP {response.status}"
+                f"Dialt credential endpoint returned HTTP {response.status}"
             ) from exc
         if response.status != 201:
             raise CredentialError(
-                f"Converse credential endpoint returned HTTP {response.status}"
+                f"Dialt credential endpoint returned HTTP {response.status}"
             )
     if (
         not isinstance(body, dict)
@@ -67,5 +67,5 @@ async def mint_session_credential(
         or type(body.get("expires_in")) is not int
         or body["expires_in"] <= 0
     ):
-        raise CredentialError("Converse credential endpoint returned an invalid response")
+        raise CredentialError("Dialt credential endpoint returned an invalid response")
     return SessionCredential(body["api_key"], body["session_id"], body["expires_in"])

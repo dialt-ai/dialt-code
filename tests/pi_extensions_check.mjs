@@ -104,7 +104,7 @@ if (ownedInputs.length !== 2 || ownedInputs.some((frame) => frame.owner !== "bri
 if (ownedInputs[0].commandId !== "p1" || ownedInputs[1].commandId !== "s1") {
   throw new Error("bridge input ownership was not command-correlated");
 }
-if (!statuses.includes("Converse voice: connected")) throw new Error("visible status was not set");
+if (!statuses.includes("Dialt voice: connected")) throw new Error("visible status was not set");
 
 const approval = pi.handlers.get("tool_call")({
   toolCallId: "tool-approval-1", toolName: "bash", input: {command: "uv run pytest -q"},

@@ -1,4 +1,6 @@
 import { FRAME_SAMPLES, SAMPLE_RATE } from './audio.js';
+import { CaptureClock } from './capture-health.js';
+import { addWorkletModule, defaultWorkletModuleUrls } from './worklet-url.js';
 
 export class CaptureStalledError extends Error {
   constructor(message = 'Microphone capture opened but produced no audio frames') {
@@ -24,14 +26,21 @@ export class CaptureAbortedError extends Error {
 // distorts levels — so an app that hand-rolls getUserMedia({audio:true}) silently degrades the
 // loop. Frames come out as 16 kHz 512-sample Float32 via an AudioWorklet resampler.
 // `processing:false` opens the mic fully raw (AEC+NS+AGC off): used for the optional raw ablation
-// track, and by ConverseClient.startMic on WebKit where the SDK's own AEC3 cancels instead.
+// track, and by DialtClient.startMic on WebKit where the SDK's own AEC3 cancels instead.
 export class MicCapture {
-  constructor({ onFrame, processing = true, workletUrl, deviceId } = {}) {
+  constructor({ onFrame, onClockStall, processing = true, workletUrl, deviceId } = {}) {
     this.onFrame = onFrame;
+    this.onClockStall = onClockStall;
     this.processing = processing;
     this.deviceId = deviceId || null;
     // The worklet ships with the SDK; apps only override this if their bundler relocates assets.
-    this.workletUrl = workletUrl || new URL('./mic-worklet.js', import.meta.url);
+    // Keep the primary URL literal at this call site: Vite/Rollup/Webpack discover and emit
+    // worklet assets from this exact new URL(<literal>, import.meta.url) shape.
+    const [defaultWorkletUrl, fallbackWorkletUrl] = defaultWorkletModuleUrls(
+      new URL('./mic-worklet.js', import.meta.url), 'mic-worklet.js', import.meta.url,
+    );
+    this.workletUrl = workletUrl || defaultWorkletUrl;
+    this.fallbackWorkletUrl = workletUrl ? null : fallbackWorkletUrl;
     this.context = null;
     this.stream = null;
     this.source = null;
@@ -48,6 +57,7 @@ export class MicCapture {
     }
     const token = {};
     this._startToken = token;
+    const clock = new CaptureClock();
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         echoCancellation: this.processing,   // AEC on for the loop; off for the raw track
@@ -65,12 +75,22 @@ export class MicCapture {
     this.stream = stream;
     try {
       this.context = new AudioContext();
-      await this.context.audioWorklet.addModule(this.workletUrl);
+      await addWorkletModule(
+        this.context.audioWorklet, this.workletUrl, this.fallbackWorkletUrl,
+      );
       if (this._startToken !== token) throw new CaptureAbortedError();
       this.source = this.context.createMediaStreamSource(this.stream);
       this.worklet = new AudioWorkletNode(this.context, 'voice-loop-mic', {
-        processorOptions: { targetRate: SAMPLE_RATE, frameSize: FRAME_SAMPLES },
+        processorOptions: { targetRate: SAMPLE_RATE, frameSize: FRAME_SAMPLES,
+          clockOriginMs: performance.now() - this.context.currentTime * 1000 },
       });
+      this.context.onstatechange = () => {
+        if (this.context?.state === 'running') {
+          this.worklet?.port.postMessage({
+            clockOriginMs: performance.now() - this.context.currentTime * 1000,
+          });
+        }
+      };
       let firstFrameResolve;
       const firstFrame = new Promise((resolve, reject) => {
         firstFrameResolve = resolve;
@@ -83,8 +103,14 @@ export class MicCapture {
           firstFrameResolve();
           this._firstFrameReject = null;
           const monotonic = globalThis.performance?.now?.();
-          this.onFrame?.(event.data.frame,
-            Number.isFinite(monotonic) ? monotonic : Date.now());
+          const arrivalMs = Number.isFinite(monotonic) ? monotonic : Date.now();
+          let captureMs = arrivalMs;
+          if (Number.isFinite(event.data.captureMs)) {
+            const observed = clock.observe(event.data.captureMs, arrivalMs);
+            captureMs = observed.captureMs;
+            if (observed.stallMs) this.onClockStall?.(observed.stallMs);
+          }
+          this.onFrame?.(event.data.frame, captureMs);
         }
       };
       this.silentSink = this.context.createGain();

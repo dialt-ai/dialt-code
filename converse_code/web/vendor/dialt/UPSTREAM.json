@@ -1,0 +1,11 @@
+{
+  "package": "@dialt/sdk",
+  "version": "0.48.1",
+  "repository": "https://github.com/dialt-ai/dialt",
+  "path": "sdk/browser",
+  "commit": "3846b8b4336c074cd718090e02b695f669950d5f",
+  "npm": {
+    "tarball": "https://registry.npmjs.org/@dialt/sdk/-/sdk-0.48.1.tgz",
+    "integrity": "sha512-0+QhNvg7oXY2IOyDubE1p2Qyx4PI0i61JCsw4ermKwFe+v7pcTq94oakBeJ5DBzH9h6e4g/q7Wnwg/Dp5dxJNw=="
+  }
+}

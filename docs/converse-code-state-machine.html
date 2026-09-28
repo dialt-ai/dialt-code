@@ -215,14 +215,14 @@
     <header>
       <div>
         <h1>Converse Code lifecycle</h1>
-        <p class="lede">Choose a case, then step through how a spoken request crosses Converse, the local bridge, and one visible Pi turn.</p>
+        <p class="lede">Choose a case, then step through how a spoken request crosses Dialt, the local bridge, and one visible Pi turn.</p>
       </div>
       <div class="truth"><strong>Core invariant:</strong> Pi output belongs to a voice request only after its command ID proves ownership.</div>
     </header>
 
     <section class="architecture" aria-label="System architecture">
       <div class="actor"><strong>User</strong><span>speaks and decides</span></div><div class="arrow">→</div>
-      <div class="actor"><strong>Converse</strong><span>voice + tool lifecycle</span></div><div class="arrow">→</div>
+      <div class="actor"><strong>Dialt</strong><span>voice + tool lifecycle</span></div><div class="arrow">→</div>
       <div class="actor"><strong>Converse Code</strong><span>typed state router</span></div><div class="arrow">→</div>
       <div class="actor"><strong>Pi</strong><span>visible coding session</span></div>
     </section>
@@ -299,7 +299,7 @@
       normal: {
         label: "Normal turn", summary: "request → attributable Pi result",
         steps: [
-          ["idle", "User request", "Converse calls pi_request with the user’s instruction.", "idle", "e-idle-ack"],
+          ["idle", "User request", "Dialt calls pi_request with the user’s instruction.", "idle", "e-idle-ack"],
           ["ack", "Pi acknowledges the command", "Converse Code sends prompt; events arriving during acknowledgement are buffered.", "ack", "e-idle-ack"],
           ["ownership", "Deferred, then ownership", "tool_deferred is sent first. A matching input_seen command ID proves this is our Pi turn.", "own", "e-ack-own"],
           ["running", "Pi works visibly", "Tool starts become partial results. The latest assistant message is retained as the final-text candidate.", "run", "e-own-run"],
@@ -310,8 +310,8 @@
         label: "Approval", summary: "a real decision pauses Pi without opening a TUI menu",
         steps: [
           ["running", "Protected action appears", "Pi’s extension emits approval_request with a unique approval ID, tool, and summary.", "run", "e-own-run"],
-          ["interaction", "Converse asks aloud", "A stable interaction binds the approval ID and each spoken option to the exact pi_approval arguments.", "run", ""],
-          ["decision", "User decides explicitly", "Converse constrains the turn to resolve, clarify, supersede, or cancel; resolve constructs the exact pi_approval call.", "run", ""],
+          ["interaction", "Dialt asks aloud", "A stable interaction binds the approval ID and each spoken option to the exact pi_approval arguments.", "run", ""],
+          ["decision", "User decides explicitly", "Dialt constrains the turn to resolve, clarify, supersede, or cancel; resolve constructs the exact pi_approval call.", "run", ""],
           ["resume", "Pi resumes", "The approval response is delivered and the original pi_request remains active until Pi settles.", "run", "e-run-set"],
           ["settled", "Final Pi result", "The deferred turn completes only after agent_settled.", "set", "e-run-set"]
         ]
@@ -320,8 +320,8 @@
         label: "Interrupt approval", summary: "the approval cannot survive a change of course",
         steps: [
           ["running", "Pi reaches a protected action", "Pi pauses inside its hook and emits approval_request with a unique pending ID.", "run", "e-own-run"],
-          ["voice", "Converse starts asking", "A partial interaction tells Converse exactly what needs approval and which decisions are valid.", "run", ""],
-          ["interrupt", "User interrupts with new intent", "For example: “Actually, don’t edit that—inspect the tests instead.” Converse treats this as a new pi_request, not as approval.", "run", ""],
+          ["voice", "Dialt starts asking", "A partial interaction tells Dialt exactly what needs approval and which decisions are valid.", "run", ""],
+          ["interrupt", "User interrupts with new intent", "For example: “Actually, don’t edit that—inspect the tests instead.” Dialt treats this as a new pi_request, not as approval.", "run", ""],
           ["block", "Obsolete approval is blocked first", "Before steering, Converse Code sends block for every pending approval ID. The protected action cannot accidentally continue.", "run", ""],
           ["retract", "The stale question is retracted", "An acknowledged host interaction update closes the stable approval ID as superseded without completing the Pi task.", "run", ""],
           ["steer", "The new direction reaches Pi", "Pi receives the interruption through steer mode while the original deferred turn remains active.", "run", ""],
@@ -387,7 +387,7 @@
       end: {
         label: "End session", summary: "voice ending is separate from turn cancellation",
         steps: [
-          ["signal", "Converse ends intentionally", "The Browser SDK emits session_end, or the user presses End session.", "idle", ""],
+          ["signal", "Dialt ends intentionally", "The Browser SDK emits session_end, or the user presses End session.", "idle", ""],
           ["shutdown", "Host shuts down Pi", "The page changes to ended state and Converse Code requests graceful Pi shutdown.", "cancel", ""],
           ["closed", "Both surfaces agree", "Voice controls show ended and the visible Pi process exits; this is not inferred from a phrase.", "set", "e-cancel-set"]
         ]

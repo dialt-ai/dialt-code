@@ -1,4 +1,4 @@
-"""Acknowledged controls between the Converse Browser SDK and a local tool host."""
+"""Acknowledged controls between the Dialt Browser SDK and a local tool host."""
 
 from __future__ import annotations
 

@@ -1,7 +1,7 @@
 # Design
 
 Converse Code is a voice remote and reference implementation, not an agent framework. Pi owns the
-visible coding session and terminal UI. Converse owns speech and the background-tool lifecycle.
+visible coding session and terminal UI. Dialt owns speech and the background-tool lifecycle.
 
 The [interactive lifecycle explorer](converse-code-state-machine.html) steps through normal turns,
 approvals, interruptions, steering, cancellation, ownership failures, and session ending.
@@ -10,17 +10,18 @@ approvals, interruptions, steering, cancellation, ownership failures, and sessio
 
 - `pi_request(user_request)` starts one deferred Pi turn while idle and semantically steers it while
   working.
-- `pi_approval(approval_id, decision)` resolves only a matching pending approval.
+- `pi_approval(approval_id, decision)` resolves only a matching pending approval. It is
+  `resolver_only`: Dialt never offers it to the model and calls it only from a bound interaction.
 - `pi_cancel()` calls Pi's documented extension `abort()` API without ending voice.
 
-Ordinary committed user turns cannot bypass Pi: while idle, Converse is constrained to
+Ordinary committed user turns cannot bypass Pi: while idle, Dialt is constrained to
 `pi_request`; while a Pi turn is active, it must choose `pi_request` (steer) or `pi_cancel`.
 Resolver-bound approval interactions temporarily provide their narrower decision constraint.
 
 ## Boundary
 
 ```text
-Converse voice model
+Dialt voice model
         │ background tool call / cancellation
         ▼
 voice-only Browser SDK page
@@ -41,13 +42,13 @@ Pi is launched in its default interactive mode. The extension uses `sendUserMess
 turn, `deliverAs: "steer"` for active guidance, `abort()` for cancellation, and `shutdown()` for
 graceful exit. Model questions and changes go through the same natural-language Pi message as any
 other request. A Pi-internal `pi_session_model` capability reads `ctx.model`/`modelRegistry` and
-changes the session through `setModel()`; it is not a Converse tool or a menu driver. The extension
+changes the session through `setModel()`; it is not a Dialt tool or a menu driver. The extension
 emits explicit message, tool, and settled events. It never reads terminal rows, types keys, or
 infers menu state.
 
 ## Event mapping
 
-| Visible Pi extension evidence | Converse control |
+| Visible Pi extension evidence | Dialt control |
 | --- | --- |
 | acknowledged `sendUserMessage` command | `tool_deferred` |
 | ordinary tool start | structured `tool_partial_result` without an interaction |
@@ -60,7 +61,7 @@ Early events are buffered until `tool_deferred` has been delivered. One bridge-o
 active at a time because Pi's visible-TUI extension API does not attach a caller ID to lifecycle
 events. The extension therefore emits an ownership event for each matched `sendUserMessage()`
 input. Manual terminal input, another extension's input, session replacement, or bridge loss while
-a voice task is active fails that Converse tool closed instead of attributing unrelated output.
+a voice task is active fails that Dialt tool closed instead of attributing unrelated output.
 Each root Pi turn owns a fresh host handle. Converse Code waits for the correlated
 `tool_deferred_ack`; a rejected or missing acknowledgement aborts Pi and fails the parent call
 instead of pretending the ordinary tool deadline was replaced.
@@ -70,11 +71,11 @@ separate states; only the owned running state can carry assistant output or pend
 ## Approvals
 
 The bridge extension intercepts `bash`, `edit`, and `write` before execution, creates a unique
-approval ID, and waits without opening a terminal menu. Converse receives the ID, tool, target, and
+approval ID, and waits without opening a terminal menu. Dialt receives the ID, tool, target, and
 valid decisions as a stable background-tool interaction whose resolver binds `pi_approval`, the
-fixed approval ID, and each spoken option's exact decision argument. Converse queues its narration
+fixed approval ID, and each spoken option's exact decision argument. Dialt queues its narration
 when the voice floor is busy and exposes the narration lifecycle. Once any of the ask was heard,
-Converse constrains the next user turn to an explicit resolve, clarify, supersede, or cancel
+Dialt constrains the next user turn to an explicit resolve, clarify, supersede, or cancel
 transition. Resolve executes the broker-constructed exact `pi_approval` call; the model never
 constructs its arguments. A new `pi_request` first blocks any pending approval and then steers the
 change of course. Stale IDs, malformed decisions, disconnects, cancellation, and timeouts fail
@@ -89,26 +90,26 @@ its own timeout (`approval_expired`), and the router sends an acknowledged
 before closing the matching interaction as superseded. A broker-side cancel is reflected to the
 host by its stable interaction ID and blocks the matching Pi hook. A decision arriving for a
 closed approval fails deterministically with `approval_not_pending`, and an extension-side
-rejection of a blocking command never blocks the steer it was clearing the way for. Converse
+rejection of a blocking command never blocks the steer it was clearing the way for. Dialt
 closes open interactions on reconnect; `tool_deferred_resume` therefore causes the router to
 re-raise every still-pending Pi approval from its retained typed request.
 
 ## Evidence and outcomes
 
 Prompt acknowledgement proves only that Pi accepted the user message. A successful settled Pi
-turn is the authoritative result of `pi_request`, so Converse receives `outcome: succeeded` and
+turn is the authoritative result of `pi_request`, so Dialt receives `outcome: succeeded` and
 `verified: true` and may report Pi's answer. Failed and cancelled turns remain unverified and may
 not be narrated as successful work.
 
 ## Browser boundary
 
-Converse owns conversational ending. Its intentional transport close is exposed by the Browser SDK
+Dialt owns conversational ending. Its intentional transport close is exposed by the Browser SDK
 as `session_end`; the page forwards that structured lifecycle event and the host gracefully shuts
 down Pi. Converse Code does not duplicate end intent with a phrase matcher or tool.
 
 The page has microphone control but no text input. One tagged session state—idle, opening, live,
 or ended—drives its controls; the delivery epoch and microphone exist only while live, and events
 are accepted only from the instance the session owns. It mirrors Browser SDK speech, reply, and
-tool lifecycle events; Pi remains the canonical coding transcript. Python holds the persistent Converse
+tool lifecycle events; Pi remains the canonical coding transcript. Python holds the persistent Dialt
 key and mints a short-lived browser credential. Controls are sequenced, acknowledged, retained
 across disconnects, and replayed after reconnect.

@@ -13,7 +13,7 @@ from playwright.async_api import async_playwright
 
 from converse_code.localserver import LocalServer, ServerHandlers
 
-FAKE_SDK = Path(__file__).with_name("fake_converse.js")
+FAKE_SDK = Path(__file__).with_name("fake_dialt.js")
 ARTIFACTS = Path("test-results/browser")
 
 
@@ -101,9 +101,9 @@ async def browser_page(request, browser_server):
                 if message.type == "error"
                 else None,
             )
-            await page.add_init_script("globalThis.__fakeConverse = {}")
+            await page.add_init_script("globalThis.__fakeDialt = {}")
             await page.route(
-                "**/vendor/converse/index.js",
+                "**/vendor/dialt/index.js",
                 lambda route: route.fulfill(
                     status=200,
                     content_type="application/javascript",

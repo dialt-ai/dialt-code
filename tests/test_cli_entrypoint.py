@@ -13,7 +13,7 @@ ENTRY = [sys.executable, "-m", "converse_code.cli"]
 
 
 def run(args, env_extra=None, timeout=30):
-    env = {**os.environ, "CONVERSE_API_KEY": "ck_fake_for_test", **(env_extra or {})}
+    env = {**os.environ, "DIALT_API_KEY": "dk_fake_for_test", **(env_extra or {})}
     return subprocess.run(
         ENTRY + args,
         capture_output=True,
@@ -27,7 +27,7 @@ def run(args, env_extra=None, timeout=30):
 def test_startup_checks_credentials_before_launching_pi():
     proc = run(["--no-browser", "--port", "0", "--broker-url", "ws://127.0.0.1:1"])
     assert proc.returncode == 1
-    assert "Could not reach Converse" in proc.stderr
+    assert "Could not reach Dialt" in proc.stderr
     assert "Pi was not started" in proc.stderr
     assert "Traceback" not in proc.stderr
 
@@ -39,7 +39,7 @@ def test_port_in_use_reports_cleanly():
     try:
         proc = run(["--no-browser", "--port", str(sock.getsockname()[1])])
         assert proc.returncode == 1
-        assert "Could not start the Converse session server" in proc.stderr
+        assert "Could not start the voice session server" in proc.stderr
         assert "--port" in proc.stderr
         assert "Traceback" not in proc.stderr
     finally:
@@ -75,7 +75,7 @@ async def test_successful_start_launches_pi_with_continuation_and_semantic_exten
     broker_url = f"ws://127.0.0.1:{server.sockets[0].getsockname()[1]}"
     environment = {
         **os.environ,
-        "CONVERSE_API_KEY": "ck_fake_for_test",
+        "DIALT_API_KEY": "dk_fake_for_test",
         "CONVERSE_CODE_TEST_PI_ARGS": str(args_path),
     }
     try:

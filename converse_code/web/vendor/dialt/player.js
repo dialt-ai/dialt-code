@@ -26,12 +26,6 @@ const CLEAR_FADE = 0.025;
 //   enqueue(samples) — append assistant audio (16 kHz f32) to the play queue.
 //   clear()          — discard queued audio (a barge/interrupt) and stop playing now.
 //   stop()           — clear() + tear down (full stop / disconnect).
-//
-// The queue holds resampled PCM (context rate) drained gaplessly into short BufferSources.
-//
-// Far-end tap (SDK AEC): `onScheduled(samples16k, startAt)` fires when a chunk is committed to
-// a BufferSource, with its playout time on this context's clock; `onCleared(cutAt)` fires on a
-// barge/clear so the not-yet-played reference tail is dropped. See aec.js.
 // Playback intentionally remains a unity-gain AudioContext path. Physical output routing, maximum
 // loudness, and full-duplex attenuation belong to the browser/OS; WebKit device tests found no
 // reliable web override. Do not add software boost, output-route switching, or audio-session
@@ -46,9 +40,16 @@ export class StreamingPlayer {
     this.phase = 0;          // carried fractional read position across chunks (resampler)
     this.carry = 0;          // last input sample of the previous chunk (seamless interpolation)
     this.fadeEnd = 0;        // ctx time a clear()'s fade completes — new audio never starts inside it
-    this.queue = [];         // Float32Array chunks at context rate, awaiting scheduling
+    this.queue = [];         // Float32Array chunks at 16 kHz, awaiting scheduling
+    this.held = [];          // exact native-rate tails, replayed before unscheduled PCM
+    this.holdId = null;
     this.nextTime = 0;       // ctx time of the next sample to schedule
-    this.sources = new Set(); // scheduled/playing BufferSources
+    // Reply-audio starvation telemetry: an underrun is the reply queue draining mid-reply and
+    // playback re-buffering. Session totals; takePlaybackStats() reads and resets them, so the
+    // client can attribute a window (one reply) and report it upstream. Purely observational.
+    this._replyAudioScheduled = false;   // a reply chunk was scheduled since markReplyStart()
+    this._stats = { underruns: 0, starved_ms: 0, max_gap_ms: 0 };
+    this.scheduled = [];     // in-flight sources (see module comment)
     this.timer = null;
     this._onVisibility = () => this._schedule();
   }
@@ -74,67 +75,139 @@ export class StreamingPlayer {
     if (this.ratio === 1) return Float32Array.from(input);
     const step = 1 / this.ratio;
     const n = input.length;
-    const out = [];
+    const out = new Float32Array(Math.ceil((n - this.phase) / step) + 1);
     let pos = this.phase;
+    let k = 0;
     while (pos < n) {
       // Read position pos sits between carry⌢input[pos-1] and input[pos] — position 0 is the seam.
       const i = Math.floor(pos);
       const frac = pos - i;
       const a = i === 0 ? this.carry : input[i - 1];
       const b = input[i];
-      out.push(a + (b - a) * frac);
+      out[k++] = a + (b - a) * frac;
       pos += step;
     }
     this.phase = pos - n; // remainder feeds the start of the next chunk
     this.carry = input[n - 1];
-    return Float32Array.from(out);
+    return k === out.length ? out : out.subarray(0, k);
   }
 
   async enqueue(samples) {
     if (!samples || samples.length === 0) return;
+    const epoch = this._enqueueEpoch;
     await this.ensureContext();
-    const data = this._resample(samples);
-    // Keep the pre-resample 16 kHz chunk alongside: the AEC far-end reference must match the
-    // uplink rate, and only _schedule() knows the playout time.
-    if (data.length > 0) this.queue.push({ data, src: Float32Array.from(samples) });
+    if (epoch !== this._enqueueEpoch) return;
+    this.queue.push(Float32Array.from(samples));
     this._ensureTimer();
     this._schedule();
+  }
+
+  /** A reply boundary (`turn`): underruns before any of this reply's audio belong to no reply. */
+  markReplyStart() {
+    this._replyAudioScheduled = false;
+  }
+
+  /** Read and reset the starvation counters (see the constructor note). */
+  takePlaybackStats() {
+    const out = { underruns: this._stats.underruns,
+                  starved_ms: Math.round(this._stats.starved_ms),
+                  max_gap_ms: Math.round(this._stats.max_gap_ms) };
+    this._stats = { underruns: 0, starved_ms: 0, max_gap_ms: 0 };
+    return out;
   }
 
   // Schedule queued PCM up to SCHEDULE_AHEAD past the playhead. Each call drains whole chunks
   // off the front of the queue into a BufferSource.
   _schedule() {
-    if (!this.context) return;
+    if (!this.context || this.holdId !== null) return;
     const now = this.context.currentTime;
+    const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
     // Re-buffer JITTER_LEAD when the queue had drained (first chunk or underrun) — and never
     // start inside a clear()'s fade, however the two constants are tuned relative to each other.
-    if (this.nextTime <= now) this.nextTime = Math.max(now + JITTER_LEAD, this.fadeEnd);
-    const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+    if (this.nextTime <= now) {
+      if (this.queue.length && this._replyAudioScheduled) {
+        // Mid-reply drain: the playhead passed the last scheduled reply sample before the next
+        // chunk arrived. The gap is how long the speaker starved (plus the re-buffer lead).
+        const gap = (now - this.nextTime) * 1000;
+        this._stats.underruns += 1;
+        this._stats.starved_ms += gap;
+        if (gap > this._stats.max_gap_ms) this._stats.max_gap_ms = gap;
+      }
+      this.nextTime = Math.max(now + JITTER_LEAD, this.fadeEnd);
+    }
     const horizon = hidden ? HIDDEN_SCHEDULE_AHEAD : SCHEDULE_AHEAD;
+    while (this.held.length && this.nextTime < now + horizon) {
+      const { data, src } = this.held.shift();
+      this._scheduleChunk(src, data);
+    }
+    if (this.held.length) return;
     while (this.queue.length && this.nextTime < now + horizon) {
-      const { data, src } = this.queue.shift();
-      const buffer = this.context.createBuffer(1, data.length, this.context.sampleRate);
-      buffer.copyToChannel(data, 0);
-      const source = this.context.createBufferSource();
-      source.buffer = buffer;
-      source.connect(this.master);
-      source.onended = () => this.sources.delete(source);
-      const startAt = Math.max(now, this.nextTime);
-      source.start(startAt);
-      this.onScheduled?.(src, startAt);
-      this.nextTime = startAt + buffer.duration;
-      this.sources.add(source);
+      const src = this.queue.shift();
+      this._scheduleChunk(src);
     }
   }
 
-  // Released-but-unplayed audio right now, in ms: scheduled-but-unplayed + queued-unscheduled.
-  // On a barge this is what a drain would still play — and what a clear() throws away
-  // (discarded_ms in the playback_stopped report, which re-truncates the server's heard text).
+  _scheduleChunk(src, retainedData = null) {
+    this._replyAudioScheduled = true;
+    const now = this.context.currentTime;
+    const data = retainedData ?? this._resample(src);
+    if (!data.length) return;
+    const buffer = this.context.createBuffer(1, data.length, this.context.sampleRate);
+    buffer.copyToChannel(data, 0);
+    const source = this.context.createBufferSource();
+    source.buffer = buffer;
+    source.connect(this.master);
+    const startAt = Math.max(now, this.nextTime);
+    source.start(startAt);
+    this.onScheduled?.(src, startAt);
+    this.nextTime = startAt + buffer.duration;
+    const entry = { source, startAt, endAt: this.nextTime, data, src };
+    this.scheduled.push(entry);
+    source.onended = () => { this.scheduled = this.scheduled.filter((e) => e !== entry); };
+  }
+
   pendingMs() {
     if (!this.context) return 0;
-    const scheduled = Math.max(0, this.nextTime - this.context.currentTime);
-    const queued = this.queue.reduce((s, c) => s + c.data.length, 0) / this.context.sampleRate;
-    return (scheduled + queued) * 1000;
+    const now = this.context.currentTime;
+    const replyEnd = this.scheduled.reduce((end, entry) => Math.max(end, entry.endAt), 0);
+    const scheduled = replyEnd > now ? Math.max(0, this.nextTime - now) : 0;
+    const queued = this.queue.reduce((s, c) => s + c.length, 0) / SAMPLE_RATE;
+    const held = this.held.reduce((s, c) => s + c.data.length, 0) / this.context.sampleRate;
+    return (scheduled + queued + held) * 1000;
+  }
+
+  // Stop at the current sample cursor, retaining the exact rendered native-rate tail.
+  pause(holdId) {
+    if (this.holdId !== null) return this.holdId === holdId;
+    this.holdId = holdId;
+    const ctx = this.context;
+    if (!ctx) return true;
+    const now = ctx.currentTime;
+    const tails = [];
+    for (const e of this.scheduled) {
+      if (e.endAt > now) {
+        const offset = Math.min(e.data.length, Math.max(0,
+          Math.ceil((now - e.startAt) * ctx.sampleRate)));
+        const refOffset = Math.min(e.src.length, Math.max(0,
+          Math.ceil((now - e.startAt) * SAMPLE_RATE)));
+        tails.push({ data: e.data.slice(offset), src: e.src.slice(refOffset) });
+      }
+      try { e.source.stop(now); } catch { /* already ended */ }
+    }
+    this.held = [...tails, ...this.held];
+    this.scheduled = [];
+    this.nextTime = now;
+    this.onCleared?.(now);
+    return true;
+  }
+
+  resume(holdId) {
+    if (this.holdId !== holdId) return false;
+    this.holdId = null;
+    // A deliberate hold is not an underrun.
+    this.nextTime = Math.max((this.context?.currentTime ?? 0) + JITTER_LEAD, this.fadeEnd);
+    this._schedule();
+    return true;
   }
 
   // Device output latency (context clock -> speaker), in ms.
@@ -175,11 +248,14 @@ export class StreamingPlayer {
   // the cut lands on silence instead of popping mid-waveform. `fadeS` overrides the fade for a
   // barge hard-clear (~150 ms reads as a yield, not a glitch); the default stays pop-guard short.
   clear(fadeS = CLEAR_FADE) {
+    this.holdId = null;
+    this.held = [];
+    this._enqueueEpoch = (this._enqueueEpoch ?? 0) + 1;
     this.queue = [];
     this.phase = 0;
     this.carry = 0;
     const ctx = this.context;
-    if (ctx && this.sources.size) {
+    if (ctx && this.scheduled.length) {
       const now = ctx.currentTime;
       const stopAt = now + fadeS;
       const gain = this.master.gain;
@@ -190,10 +266,10 @@ export class StreamingPlayer {
       // order, so the bus is back at 1 exactly when nothing is left playing. _schedule() keeps
       // any new audio out of the fade window via fadeEnd.
       gain.setValueAtTime(1, stopAt);
-      for (const source of this.sources) {
+      for (const { source } of this.scheduled) {
         try { source.stop(stopAt); } catch { /* already stopped */ }
       }
-      this.sources.clear();
+      this.scheduled = [];
       this.fadeEnd = stopAt;
       this.onCleared?.(stopAt);
     }

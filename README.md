@@ -1,7 +1,7 @@
 # Converse Code
 
 A deliberately small voice remote for a normal, visible Pi terminal, and a reference
-implementation for [Converse](https://converse.trelis.com) background tools and the Browser SDK.
+implementation for [Dialt](https://dialt.com) background tools and the Browser SDK.
 Pi uses the user's ChatGPT Plus/Pro Codex subscription.
 
 The example exposes the same small controls a person has over Pi:
@@ -11,7 +11,7 @@ The example exposes the same small controls a person has over Pi:
 2. `pi_approval` delivers an explicit decision for a pending approval ID.
 3. `pi_cancel` aborts Pi's current turn without ending the voice session.
 4. Pi tool events become structured, silent partials. A blocking approval becomes a persistent,
-   ID-correlated Converse `interaction` bound to the exact `pi_approval` resolver and choices.
+   ID-correlated Dialt `interaction` bound to the exact `pi_approval` resolver and choices.
 5. Pi's `agent_settled` event resolves the one deferred turn exactly once.
 
 The browser remains voice-only but mirrors the live speech transcript, assistant replies, and
@@ -21,10 +21,10 @@ lifecycle events. There is no terminal emulation, screen scraping, key injection
 shell bypass, or hidden Pi process.
 
 That same extension gates `bash`, `edit`, and `write` with ID-correlated semantic approval
-requests. Converse receives the approval ID, tool, target, and valid decisions as structured facts;
-Pi accepts only an explicit response for the pending ID. Converse owns the interaction's queued,
+requests. Dialt receives the approval ID, tool, target, and valid decisions as structured facts;
+Pi accepts only an explicit response for the pending ID. Dialt owns the interaction's queued,
 started, superseded, cancelled, or failed narration lifecycle, including when the voice floor is
-busy. Once the user has heard the ask, Converse constrains subsequent turns to resolve, clarify,
+busy. Once the user has heard the ask, Dialt constrains subsequent turns to resolve, clarify,
 supersede, or cancel it; on resolution the broker constructs the exact approval call from the
 host-declared mapping. Expiry and host-side supersession use acknowledged interaction updates, and
 pending approvals are re-raised after a deferred-job reconnect. No terminal selection menu is
@@ -63,8 +63,17 @@ uvx converse-code --continue
 Converse Code passes Pi's native `--continue` flag through, so Pi retains ownership of the coding
 session and transcript.
 
-Run `converse-code login` to store a Converse API key. The persistent key remains in Python; the
-browser receives only a short-lived session credential.
+Run `converse-code login` to store a Dialt API key, or set `DIALT_API_KEY`. The persistent key
+remains in Python; the browser receives only a short-lived session credential minted with
+`POST https://api.dialt.com/v1/session-keys`.
+
+| Variable | Default | Legacy fallback |
+| --- | --- | --- |
+| `DIALT_API_KEY` | saved `converse-code login` key | `CONVERSE_API_KEY` |
+| `DIALT_URL` (`--broker-url`) | `wss://api.dialt.com/v1/realtime` | `CONVERSE_URL` |
+| `DIALT_API_URL` (`--api-url`) | `https://api.dialt.com` | `CONVERSE_API_URL` |
+
+The Dialt name wins when both are set. The `CONVERSE_*` names keep existing setups working.
 
 For a recording or a session you may need to diagnose later, append an opt-in local trace:
 
@@ -77,7 +86,7 @@ background-tool controls and acknowledgements, and Pi semantic events. Assistant
 by the browser is saved as per-turn WAV files in the sibling `converse-session.audio/` directory;
 this lets a playback glitch be separated from an upstream TTS defect. It excludes microphone audio
 and CLI arguments, uses owner-only permissions for new files, and applies targeted redaction to structured credential
-fields, Converse and common provider keys, bearer headers, inline secret assignments and flags,
+fields, Dialt (`dk_`, legacy `ck_`) and common provider keys, bearer headers, inline secret assignments and flags,
 and local session tokens. It intentionally retains spoken transcripts, tool arguments, paths, and
 command summaries because those are needed to reconstruct a failure. Redaction cannot recognize
 every possible secret format, so treat the trace and audio directory as project-sensitive and share
@@ -86,7 +95,7 @@ them deliberately.
 ## Reference architecture
 
 ```text
-Converse voice model
+Dialt voice model
         │ tool call / cancellation
         ▼
 Voice-only Browser SDK page
@@ -97,11 +106,12 @@ PiControlRouter ── local semantic bridge ── visible Pi TUI ── Codex
         └─ deferred / partial(interaction) / terminal result
 ```
 
-The model-facing surface is limited to `pi_request`, `pi_approval`, and `pi_cancel`. Questions and
-requests about Pi—including model changes—are ordinary messages interpreted by Pi itself. See
+The model-facing surface is limited to `pi_request` and `pi_cancel`. `pi_approval` is declared
+`resolver_only`: Dialt calls it only from the caller's answer to a bound approval interaction.
+Questions and requests about Pi, including model changes, are ordinary messages interpreted by Pi itself. See
 [docs/DESIGN.md](docs/DESIGN.md) for the event mapping and evidence rules.
 
-Session ending follows Converse's native lifecycle. An intentional server close becomes the
+Session ending follows Dialt's native lifecycle. An intentional server close becomes the
 Browser SDK's structured `session_end` event, which gracefully shuts down Pi. Converse Code does
 not classify farewell phrases or expose a competing end tool.
 
@@ -122,4 +132,5 @@ bounded task through the semantic extension bridge.
 
 ## License
 
-Apache-2.0. The vendored Converse Browser SDK retains its own notices and third-party licenses.
+Apache-2.0. The vendored Dialt Browser SDK (`@dialt/sdk`, pinned in
+`converse_code/web/vendor/dialt/UPSTREAM.json`) retains its own notices and third-party licenses.

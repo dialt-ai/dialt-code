@@ -1,15 +1,17 @@
-const state = globalThis.__fakeConverse = Object.assign({
+const state = globalThis.__fakeDialt = Object.assign({
   clients: [],
   transportLive: true,
-}, globalThis.__fakeConverse || {});
+}, globalThis.__fakeDialt || {});
 
 export function createSessionId() {
   return "browser-e2e-session";
 }
 
-export class ConverseClient extends EventTarget {
+export class DialtClient extends EventTarget {
   constructor(options) {
     super();
+    // Mirror the real SDK: 0.48 rejects every mode kind except "dialt".
+    if (options.mode?.kind !== "dialt") throw new TypeError("mode.kind must be dialt");
     this.options = options;
     this.sessionId = options.sessionId;
     this.bridgeCalls = [];

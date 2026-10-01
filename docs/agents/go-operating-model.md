@@ -62,7 +62,7 @@ For this repository, the durable behavioral inventory is:
 
 - HTTP, WebSocket, credential, origin, and token security boundaries;
 - Pi command acknowledgement, ownership attribution, fail-closed disconnects, cancellation, and approval decisions;
-- the public Converse background-tool manifest and lifecycle outcomes;
+- the public Dialt background-tool manifest and lifecycle outcomes;
 - browser transcript provenance, interruption ordering, queued approval interactions, durable control replay, microphone mute/end lifecycle, autoscroll, and user-visible activity state;
 - session trace structure and redaction.
 

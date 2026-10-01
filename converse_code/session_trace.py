@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 SENSITIVE_KEY = re.compile(r"(?:api[_-]?key|authorization|credential|password|secret|token)$", re.I)
-CONVERSE_KEY = re.compile(r"\bck_[A-Za-z0-9._-]+")
+DIALT_KEY = re.compile(r"\b[cd]k_[A-Za-z0-9._-]+")  # dk_ keys, and legacy ck_ keys
 BEARER = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/-]+=*")
 QUERY_TOKEN = re.compile(r"([?&]t=)[^&#\s]+")
 INLINE_SECRET = re.compile(
@@ -28,7 +28,7 @@ KNOWN_SECRET = re.compile(
 
 
 def _redact_string(value: str) -> str:
-    value = CONVERSE_KEY.sub("[REDACTED]", value)
+    value = DIALT_KEY.sub("[REDACTED]", value)
     value = BEARER.sub("Bearer [REDACTED]", value)
     value = QUERY_TOKEN.sub(r"\1[REDACTED]", value)
     value = INLINE_SECRET.sub(lambda match: f"{match.group(1)}[REDACTED]", value)

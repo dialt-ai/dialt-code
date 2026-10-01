@@ -1,9 +1,269 @@
 # Changelog
 
+## 0.48.1
+
+- Document `sendToolResult` `outcome` and `verified`: send them whenever the host can establish
+  them. No behaviour changes.
+
+## 0.48.0
+
+- Breaking alpha cleanup: remove flow, ambience, vendor relay and research controls,
+  deprecated Converse names, `mode.kind="converse"`, `brain="genius"` and `wait_for_tool`.
+  Use Dialt names and `expected_duration`. New eval requests reject `dialt-genius`; use
+  `dialt-smart`. Historical runs remain readable.
+- See the [alpha migration guide](https://dialt.com/docs/api/migration/) before upgrading.
+- Reset starts a new logical conversation and recording identity with retained configuration.
+- Remove implementation exports `EchoCanceller`, `needsSdkAec`, `MicCapture`,
+  `TrackFeeder`, `WebRtcSession` and `UPLINK_CHANNEL_RAW`; use `DialtClient` for capture and transport.
+- Browser reset preserves microphone capture where possible; pending old operations fail.
+
+- The `turn` frame no longer carries `endpoint_source`. It was undocumented, named an internal
+  pipeline component, and no SDK code read it; the session recording keeps it for Dialt support.
+  Nothing in the SDK changes.
+
+## 0.47.0
+
+- Stop restarting the microphone when the permission grant reveals the device inventory. WebKit
+  fires `devicechange` as labels appear, and the SDK read it as a default-device change,
+  releasing and reopening capture on every fresh Safari page load.
+- `listening` now means capture is live, not just that a frame arrived. On WebKit's raw capture
+  (SDK AEC3) it waits for a frame that is not digital silence, because Safari can hand over
+  silent frames while the device starts; after `captureSignalTimeoutMs` (default 5000) of silence
+  it fires with `signal_unverified: true`. `startMic()` still resolves on the first frame.
+- Mid-call, `recovering` reports `capture_stall` (no frames for 300 ms) or `capture_silent`
+  (300 ms of raw digital silence on WebKit), and `listening` fires again when audio returns.
+- Worklet capture timestamps stay on page time across audio-thread stalls: the SDK re-anchors
+  them and emits `capture_stall` with the lost `stall_ms`. Recordings show the stall as a gap
+  instead of pulling later audio earlier, which inflated aligned latency by the stall length.
+
+## 0.46.0
+
+Retire the genius tier: `mode.brain` is `"fast"` (default) or `"smart"`. `"genius"` is still
+accepted as a deprecated alias: the SDK logs a `console.warn` and sends `"smart"`, which is how
+the server runs, bills and records it.
+
+## 0.45.0
+
+Accept `mode.brain: "genius"`, the strongest and slowest tier, billed at the genius rate.
+
+## 0.44.0
+
+Accept `mode.brain`: `"fast"` (default) or `"smart"`. Smart is a stronger, slower model billed
+at the smart rate.
+
+## 0.43.0
+
+Reject blank voice keys and retain only server-confirmed voice switches for reconnect.
+Unknown or retired voices produce `invalid_voice`; use `GET /v1/voices` for current keys.
+
+## 0.42.0
+
+- Remove public `turn_end_threshold` and `temperature` tuning. Dialt owns these settings;
+  callers must omit them. Unsupported fields are rejected before session setup.
+
+## 0.41.0
+
+- Stamp microphone frames on the audio thread and tag every WebSocket uplink with
+  `capture_clock_v1`, so recordings keep source capture timing. Servers without the
+  capability keep recording by arrival time.
+
+## 0.40.0
+
+- Default new browser clients to `wss://api.dialt.com/v1/realtime` and export
+  `DEFAULT_REALTIME_URL`. Existing explicit URLs, including temporary legacy `/ws`, remain
+  accepted during the migration.
+
+## 0.39.0
+
+- Expose `client.sessionUuid`, the server-minted logical session identifier from `ready`. Null
+  until the first `ready`; stable across successful resumes and broker transfers; freshly minted
+  for a new dialogue even when `sessionId` is reused. Older servers that omit it leave it null.
+
+## 0.38.0
+
+- Remove the previous policy action and tool-restriction configuration. Policies use
+  conditions and actions with optional agent instructions and quiet background guidance.
+- Validate policy text and identifier limits before connecting.
+
+## 0.37.0
+
+- Define policy conditions and actions once, with independent agent instructions and
+  quiet background guidance. Existing action configurations remain accepted during migration.
+
+## 0.36.0
+
+- Policy rules can invoke a configured client tool with fixed arguments. Quiet guidance remains
+  `next_turn`; existing `speak_now` rules retain their behavior.
+- Policy tool results use ordinary permissions, deferral and completion handling.
+
+
+## 0.35.0
+
+- Accept opt-in policy occurrence, correction, batching and tool-restriction controls.
+
+## 0.34.0
+
+- Add `handoffAgent(...)`, an atomic, acknowledged same-session agent handoff. It waits through
+  an optional queued acknowledgement for the final correlated applied or rejected result, updates
+  reconnect replay mode only after application, and never retries an uncertain disconnect.
+
+## 0.33.0
+
+- Add `setInstructions(instructions, {newSpeaker})`: replace the session instructions mid-call,
+  from the next reply on. `newSpeaker: true` declares that a different agent takes the call from
+  here; the server folds everything said so far into a transcript the new agent holds, so it never
+  reads the previous agent's lines as its own. With `setTools()` and `setVoice()` this is the
+  same-session hand-off between agents; the tool-result note alone was not enough.
+
+## 0.32.0
+
+- `mode.policy` declares a policy agent beside the call: rules the broker's judge watches the
+  transcript for, each with the instruction it injects when the rule applies and whether the
+  agent replies at once (`speak_now`) or at its next turn (`next_turn`). Each raised rule
+  arrives as a `policy_flag` event. Shape validation here; the server applies the size limits.
+
+## 0.31.0
+
+- Add `setTools(tools)`: replace the client tool manifest mid-session for an agent whose
+  capabilities change by call phase (an intake persona declaring only a hand-off tool, then the
+  specialist's tools once the hand-off lands). Managed tools ride the swap; `tool_choice` resets
+  to `"auto"`. Pairs with `setVoice()` for a same-session persona hand-off.
+
+## 0.30.0
+
+- Add `resolveToolPermission(id, decision)` for host-managed application approval.
+  Declare `permission_source: "application"` with `requires_permission: true` and listen for
+  `permission_pending` and `permission_resolution` to integrate your approval application.
+  This release uses `caller` and `application` as the only permission sources; the old
+  `conversation` and `external` values are no longer accepted.
+
+## 0.28.0
+
+- WebSocket voice playback supports capability-negotiated provisional holds after a possible
+  interruption. Matching recovery resumes retained audio; cancellation discards it with accurate
+  playback accounting. WebRTC and custom players without hold support keep existing behavior.
+
+## 0.27.2
+
+- Session openers now use the ordinary assistant-turn lifecycle: they can be interrupted, and
+  only the heard prefix remains in conversation context after a barge-in.
+
+## 0.27.1
+
+- Make the public Browser SDK guide the single source for setup, AudioWorklets, microphone lifecycle, and input selection; keep this package README as a concise install entry point.
+
+## 0.27.0
+
+- Deprecated `ConverseClient` and `mode.kind: 'converse'` now emit one console warning per
+  page while remaining source compatible. Use `DialtClient` and `mode.kind: 'dialt'`.
+
+## 0.26.0
+
+- `mode.end_call` also accepts `{ when: '<ending condition>' }`: the host states when the agent
+  may end the call, declared to the agent as part of the managed `end_call` tool. `true` keeps
+  Dialt's default (the caller asks you to end the call).
+
+## 0.25.0
+
+- Voice sessions may set `mode.turn_end_threshold` from 0.05 to 0.5 to override the shared
+  endpoint operating point for that session. Omit it to retain the deployment default.
+
+## 0.24.0
+
+- `DialtClient` is now the canonical browser client name; `ConverseClient` remains as a deprecated source-compatible alias.
+- New sessions send `mode.kind: 'dialt'`; legacy `converse` input is still accepted and normalized.
+
+## 0.23.0
+
+- The package is now published as `@dialt/sdk`; `@trelis/converse` is deprecated.
+- Package metadata and documentation now point to Dialt and
+  [`dialt-ai/dialt`](https://github.com/dialt-ai/dialt).
+- The runtime API and wire protocol are unchanged.
+
+## 0.22.1
+
+- `startMic()` and the WebRTC track feeder retry their packaged source worklet when a CDN-transformed
+  SDK entry cannot load its sibling asset. This fixes esm.sh imports, where the transformed entry
+  lives under `es2022/` while the worklets remain under `es2022/src/`.
+
+## 0.22.0
+
+- Playback-health telemetry: the player counts mid-reply underruns (queue drained at the
+  speaker) and, at each reply's `done`, the client sends
+  `{"type":"client_event","event":"playback_report", underruns, starved_ms, max_gap_ms, turn_id}`
+  over WebSocket transports. No behaviour change: buffering is untouched; the report is
+  record-only on the server and sizes the jitter buffer from real sessions. Not sent over
+  WebRTC, where the browser owns the jitter buffer.
+
+## 0.21.1
+
+- Removed `playAcknowledgements` and the `ack` frame handler: the server does not send assistant
+  backchannel clips yet (roadmap, not shipped), so the option was a no-op and the docs overstated
+  it. Passing the old option is still silently accepted.
+
+## 0.21.0 - 2026-08-30
+
+- `mode.end_call` (default `false`) declares the managed `end_call(farewell)` tool so the agent can
+  end the session. When it calls the tool, Dialt speaks only the farewell, sends
+  `session_end_requested` with that `farewell`, and closes after a short grace unless the user
+  speaks. Without the flag the agent cannot end the session; the host ends it with `wrap_up` or by
+  closing. While enabled, the name `end_call` is reserved, like `web_search` (`invalid_tools`). Pass-through only:
+  validation and the default are the only client changes.
+
+## 0.20.0 - 2026-08-28
+
+- `mode.modality` selects `"voice"` (the default) or `"text"`. Text sessions use the same
+  instructions, tools, history and event lifecycle without microphone or playback setup.
+- `sendText(text)` commits one `input_text` user turn in text mode and returns whether it was
+  written to the live connection. In voice sessions `sendText` is unchanged: still the user-role
+  `injectContext` shorthand returning the acknowledgement promise, so existing voice
+  integrations keep working. Text rejects microphone capture and the WebRTC transport so
+  integrations cannot accidentally open an unused media pipeline.
+
+## 0.19.1 - 2026-08-22
+
+- Tool declarations: `expected_duration` (`"instant"` / `"seconds"` / `"long"`) replaces
+  `wait_for_tool` in the docs. It says what the caller should hear on a tool turn (the answer
+  directly, or an acknowledgement first); left out, Dialt learns from observed results.
+  `wait_for_tool: true` still passes through as a deprecated alias of `"instant"` during alpha and
+  will be removed at beta. Pass-through only: no client code changed.
+
+## 0.19.0 - 2026-08-22
+
+- `ambience` constructor option (`'thinking'` DEFAULT; `'off'`, `'continuous'`; or an object with
+  `mode` plus `afterS`/`fadeInS`/`fadeOutS`/`level`) and `client.setAmbience(mode)`: a soft
+  generative bed rendered in the SDK and mixed THROUGH the SDK player, so it sits in the echo
+  canceller's far-end reference on every transport and on WebKit/iOS (where the old playground
+  bed on its own AudioContext had to be disabled). `'continuous'` plays it under the whole call
+  from the first reply; `'thinking'` plays it only while Dialt is blocking on a tool result with
+  nothing to say - fading in after ~1.5 s of silence and out again under the reply's first
+  syllables, a real crossfade - so a caller waiting on a slow backend hears "still working"
+  instead of dead air. The thinking sound is ON BY DEFAULT from this release (it plays nothing
+  unless a tool wait runs long); pass `ambience: 'off'` to keep the old silence. Bed-only audio
+  is never queued ahead of a reply and never counts toward
+  barge `discarded_ms`. Same musical design and constants as the server-mixed WebRTC
+  `background_audio` bed (the two renderers share the score, not the samples). WebSocket
+  transport only: over webrtc the SDK player is not in the audio path, so the local ambience
+  stays silent and `mode.background_audio` is the option there.
+- New server event `working` (`active: true|false`): Dialt is blocking on a tool result
+  (client tools, web_search, think_deeply) with nothing audible, or that wait ended. Drives the
+  thinking sound; also usable for a "working..." UI state.
+- `StreamingPlayer.setUnderlay(bed)` / `resumeUnderlay()`: the underlay path the ambience uses.
+  Audio is now resampled at schedule time rather than at enqueue (no wire or API change).
+
+## 0.18.0 - 2026-08-18
+
+- `mode.background_audio` (default `false`): a server-mixed background underscore that plays for
+  the whole call, so the silence between turns feels connected. **Requires
+  `transport: 'webrtc'`** — the bed rides the server's playout track, the only downlink that runs
+  continuously between turns. The SDK drops the field with a console warning rather than sending
+  it on any non-WebRTC session, which matters because WebKit downgrades `webrtc` to `ws` for you;
+  without that, asking for both would cost the whole session on iOS instead of just the music.
+
 ## 0.17.0 - 2026-08-17
 
 - **Breaking (inert):** removed the reversible-playback protocol. The broker stopped sending
-  `playback_pause`/`playback_resume` when the ink-decider barge fallback was deleted, so this
+  `playback_pause`/`playback_resume` when the old barge fallback was deleted, so this
   client half has been dead code since. `StreamingPlayer.pause()`, `.resume()` and `.paused` are
   gone, custom players no longer need them, and start frames no longer advertise
   `playback_pause_v1` (`client.capabilities` is now always `[]`). Barge handling is unchanged:
@@ -112,7 +372,7 @@
 
 ## 0.8.0 - 2026-08-08
 
-- License Trelis-authored Browser SDK code under Apache 2.0; bundled AEC components remain under
+- License Dialt-authored Browser SDK code under Apache 2.0; bundled AEC components remain under
   the third-party terms reproduced in the package.
 - Keep assistant playback on the browser's unity-gain path, with no SDK limiter, software boost,
   output-route switch, or `navigator.audioSession` manipulation.
@@ -246,4 +506,4 @@
 
 ## 0.1.0
 
-- Initial browser SDK extracted from the Converse web client.
+- Initial browser SDK extracted from the Dialt web client.

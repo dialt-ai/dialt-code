@@ -144,10 +144,10 @@ export default function (pi) {
 
   const connect = () => {
     if (!url || !context) return;
-    setStatus("Converse voice: connecting");
+    setStatus("Dialt voice: connecting");
     socket = new WebSocket(url);
     socket.addEventListener("open", () => {
-      setStatus("Converse voice: connected");
+      setStatus("Dialt voice: connected");
       send({type: "bridge_ready"});
     });
     socket.addEventListener("message", async (event) => {
@@ -158,10 +158,10 @@ export default function (pi) {
       catch (error) { send({type: "extension_error", error: String(error)}); }
     });
     socket.addEventListener("close", () => {
-      failPendingApprovals("the Converse approval bridge disconnected");
+      failPendingApprovals("the Dialt approval bridge disconnected");
       socket = null;
       if (context) {
-        setStatus("Converse voice: reconnecting");
+        setStatus("Dialt voice: reconnecting");
         reconnectTimer = setTimeout(connect, 500);
       }
     });
@@ -200,7 +200,7 @@ export default function (pi) {
   pi.on("tool_call", async (event) => {
     if (allowForSession || !["bash", "edit", "write"].includes(event.toolName)) return;
     if (socket?.readyState !== WebSocket.OPEN) {
-      return {block: true, reason: "Blocked because Converse approval is disconnected."};
+      return {block: true, reason: "Blocked because Dialt approval is disconnected."};
     }
     const input = event.input || {};
     const supplied = event.toolName === "bash" ? input.command : (input.path || input.file_path);
@@ -218,7 +218,7 @@ export default function (pi) {
       pendingApprovals.set(approvalId, {resolve, timer});
       send({type: "approval_request", approvalId, toolName: event.toolName, summary});
     });
-    setStatus("Converse voice: connected");
+    setStatus("Dialt voice: connected");
     if (result.decision === "block") {
       const reason = result.reason
         ? `Blocked because ${result.reason}: ${target}`

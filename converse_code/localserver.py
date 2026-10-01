@@ -74,7 +74,7 @@ class LocalServer:
         app.router.add_get("/pi", self._pi_ws)
         app.router.add_post("/session-credential", self._session_credential)
         app.router.add_post("/audio-diagnostic", self._audio_diagnostic)
-        app.router.add_get("/vendor/converse/{name}", self._vendor)
+        app.router.add_get("/vendor/dialt/{name}", self._vendor)
         if isinstance(self._runtime, RunningServer):
             raise RuntimeError("local server is already running")
         runner = web.AppRunner(app)
@@ -162,7 +162,7 @@ class LocalServer:
         return web.FileResponse(WEB_DIR / "index.html", headers=self.NO_STORE)
 
     async def _vendor(self, request: web.Request) -> web.StreamResponse:
-        """Serve the vendored @trelis/converse SDK modules to the page.
+        """Serve the vendored @dialt/sdk modules to the page.
 
         Deliberately not token-gated: an ES module's own static imports can't
         carry a query string, and these are bundled Apache-licensed client modules
@@ -171,7 +171,7 @@ class LocalServer:
         name = request.match_info["name"]
         if not name.endswith(".js") or "/" in name or ".." in name:
             return web.Response(status=404, text="not found")
-        path = WEB_DIR / "vendor" / "converse" / name
+        path = WEB_DIR / "vendor" / "dialt" / name
         if not path.is_file():
             return web.Response(status=404, text="not found")
         return web.FileResponse(
@@ -251,7 +251,7 @@ class LocalServer:
             credential = await self.handlers.session_credential(session_id)
         except Exception:
             log.exception("could not mint browser session credential")
-            return web.json_response({"error": "could not reach Converse"}, status=502)
+            return web.json_response({"error": "could not reach Dialt"}, status=502)
         return web.json_response(credential, status=201)
 
     async def _audio_diagnostic(self, request: web.Request) -> web.Response:

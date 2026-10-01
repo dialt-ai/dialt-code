@@ -7,6 +7,11 @@ class VoiceLoopMicProcessor extends AudioWorkletProcessor {
     this.buffer = [];
     this.sourcePos = 0;
     this.carry = 0;   // last sample of the previous block (seamless interpolation across blocks)
+    this.clockOriginMs = options.processorOptions?.clockOriginMs || 0;
+    this.bufferTimeMs = null;
+    this.port.onmessage = (event) => {
+      if (Number.isFinite(event.data?.clockOriginMs)) this.clockOriginMs = event.data.clockOriginMs;
+    };
   }
 
   process(inputs) {
@@ -16,6 +21,8 @@ class VoiceLoopMicProcessor extends AudioWorkletProcessor {
     }
 
     const mono = this.mixToMono(input);
+    // Timestamp the first buffered sample on the audio thread, before main-thread delivery.
+    if (this.bufferTimeMs === null) this.bufferTimeMs = currentTime * 1000;
     if (this.sourceRate === this.targetRate) {
       this.pushSamples(mono);
     } else {
@@ -66,10 +73,11 @@ class VoiceLoopMicProcessor extends AudioWorkletProcessor {
     while (this.buffer.length >= this.frameSize) {
       const frame = new Float32Array(this.frameSize);
       for (let i = 0; i < this.frameSize; i += 1) frame[i] = this.buffer.shift();
-      this.port.postMessage({ type: "frame", frame }, [frame.buffer]);
+      const captureMs = this.clockOriginMs + this.bufferTimeMs;
+      this.bufferTimeMs += this.frameSize / this.targetRate * 1000;
+      this.port.postMessage({ type: "frame", frame, captureMs }, [frame.buffer]);
     }
   }
 }
 
 registerProcessor("voice-loop-mic", VoiceLoopMicProcessor);
-

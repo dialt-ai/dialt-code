@@ -117,13 +117,13 @@ async function liveSession(){
   // {kind:"opening"} assignment below always lands first.
   const opening={kind:"opening",promise:null,instance:null};
   opening.promise=(async()=>{
-    const sdk=await import("./vendor/converse/index.js");
+    const sdk=await import("./vendor/dialt/index.js");
     const sessionId=sdk.createSessionId();
     const response=await fetch(`/session-credential?t=${encodeURIComponent(token)}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({session_id:sessionId})});
     if(!response.ok)throw new Error(`credential request failed: ${response.status}`);
     const credential=await response.json();
     audioDiagnostics=credential.audio_diagnostics===true;
-    const instance=new sdk.ConverseClient({url:credential.ws_url,apiKey:credential.api_key,sessionId:credential.session_id,mode:{kind:"converse",voice:"classic",instructions,web_search:false,silence_nudge_s:30,silence_end_s:90,tools:credential.tools||[],tool_choice:{tool:"pi_request"}}});
+    const instance=new sdk.DialtClient({url:credential.ws_url,apiKey:credential.api_key,sessionId:credential.session_id,mode:{kind:"dialt",voice:"classic",instructions,web_search:false,silence_nudge_s:30,silence_end_s:90,tools:credential.tools||[],tool_choice:{tool:"pi_request"}}});
     opening.instance=instance;
     instance.addEventListener("event",event=>handleEvent(instance,event.detail||{}));
     if(session.kind==="ended"){instance.close();throw new Error("the session has ended")}
@@ -275,7 +275,7 @@ voice.onclick=async()=>{
   try{
     const live=await liveSession();
     if(live.mic==="off"){
-      await live.client.startMic({workletUrl:"./vendor/converse/mic-worklet.js"});
+      await live.client.startMic({workletUrl:"./vendor/dialt/mic-worklet.js"});
       live.mic="listening";voice.textContent="Mute microphone";
     }else{
       live.mic=live.mic==="listening"?"muted":"listening";

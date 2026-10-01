@@ -1,0 +1,12 @@
+Dialt Browser SDK
+Copyright 2026 Dialt
+
+Dialt-authored portions of this SDK are licensed under the Apache License, Version 2.0.
+
+The bundled src/aec3-wasm.js includes third-party WebRTC audio-processing and Emscripten
+components, including libc++abi. Their copyright, license, disclaimer, and patent texts are
+reproduced under
+THIRD_PARTY_LICENSES/ and continue to govern those components.
+
+Neither the Apache license nor these third-party licenses grant rights to the hosted Dialt
+service, its models, Dialt trademarks, or server-side software.

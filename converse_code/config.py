@@ -1,16 +1,26 @@
-"""API key storage: CONVERSE_API_KEY env var, else ~/.config/converse-code/config.json."""
+"""API key storage: DIALT_API_KEY env var, else ~/.config/converse-code/config.json.
+
+CONVERSE_API_KEY is still read as a fallback for existing setups.
+"""
 
 import json
 import os
 from pathlib import Path
 
 CONFIG_PATH = Path("~/.config/converse-code").expanduser() / "config.json"
+API_KEY_ENV = ("DIALT_API_KEY", "CONVERSE_API_KEY")
+
+
+def env(name: str, legacy: str, default: str) -> str:
+    """Read a Dialt environment variable, falling back to its Converse-era name."""
+    return os.environ.get(name) or os.environ.get(legacy) or default
 
 
 def get_api_key() -> str | None:
-    key = os.environ.get("CONVERSE_API_KEY")
-    if key:
-        return key
+    for name in API_KEY_ENV:
+        key = os.environ.get(name)
+        if key:
+            return key
     try:
         loaded = json.loads(CONFIG_PATH.read_text())
         data = loaded if isinstance(loaded, dict) else {}
